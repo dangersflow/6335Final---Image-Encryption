@@ -6,6 +6,7 @@ from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 import io
 import math
+import time
 
 key = Fernet.generate_key()
 
@@ -27,7 +28,11 @@ with Image.open("./"+input_image) as image:
     image.show()
 
 f = Fernet(key)
+
+timer1 = time.time()
 cyphertext = f.encrypt(msg)
+enc_time = time.time() - timer1
+print("Time to encrypt: "+str(round(enc_time, 4))+" seconds\n")
 
 c_size = len(cyphertext)
 c_pixels = int((c_size+2)/3)
@@ -43,7 +48,11 @@ with Image.frombytes('RGB', (W, H), img_data) as cypherpic:
     cypherpic.save(c_name)
     print("Encrypted Image:\t./"+c_name+"\n")
 
+timer2 = time.time()
 cleartext = f.decrypt(cyphertext)
+dec_time = time.time() - timer2
+print("Time to decrypt: "+str(round(dec_time, 4))+" seconds\n")
+
 
 if cleartext == msg:
     print("It Worked!\n")
