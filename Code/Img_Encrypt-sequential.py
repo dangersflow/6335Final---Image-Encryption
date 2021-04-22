@@ -5,65 +5,198 @@ from cryptography.fernet import Fernet
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 import io
+import os
+import glob
 import math
 import time
+import progressbar
 
-key = Fernet.generate_key()
+#global path definitions
+O_path = os.path.join("./", "Original_Images")
+E_path = os.path.join("./", "Encrypted_Images")
+D_path = os.path.join("./", "Decrypted_Images")
 
-with open('secret.key', 'wb') as new_key_file:
-    new_key_file.write(key)
+# Wrapper for PIL images 
+class Image_Data:
+    def __init__(self, image):
+        self.image = image
+        self.f_name = image.filename
+        self.b_array = np.array(image).tobytes()
+        self.shape = np.array(image).shape
+        self.datatype = np.array(image).dtype.name
 
-print("\nKey: " + str(key) + "\n")
+# Generate Image_Data list
+def get_images(path):
+    img_dir = path
+    data_path = os.path.join(img_dir,'*g') 
+    files = glob.glob(data_path) 
+    img_arr = []
 
-input_image = "testimg.jpg"
+    # initialize a progress bar for loading images
+    widgets = ['Loading Images: ', progressbar.Bar('█'),' (', progressbar.ETA(), ') ',]
+    bar = progressbar.ProgressBar(28, widgets = widgets).start()
+    i = 0
 
-with Image.open("./"+input_image) as image:
-    arr = np.array(image)
-    shape = arr.shape
-    datatype = arr.dtype.name
-    msg = arr.tobytes()
-    d1 = ImageDraw.Draw(image)
-    d1.text((28,36), "Original Image", font=ImageFont.truetype(font="Keyboard.ttf", size=40), fill=(255,0,0))
-    print("Original Image: \t./"+input_image+"\n")
-    image.show()
+    # loop through the images and append the newly created PIL image to the Image_Data list
+    for f in files:
+        i += 1 
+        img = Image.open(f)
+        img_arr.append(Image_Data(img))
+        bar.update(i)
+    print("\n\n")
 
-f = Fernet(key)
+    return img_arr
 
-timer1 = time.time()
-cyphertext = f.encrypt(msg)
-enc_time = time.time() - timer1
-print("Time to encrypt: "+str(round(enc_time, 4))+" seconds\n")
+# Fernent setup
+def get_key():
+    key = Fernet.generate_key()
+    with open('secret.key', 'wb') as new_key_file:
+        new_key_file.write(key)
 
-c_size = len(cyphertext)
-c_pixels = int((c_size+2)/3)
-W = H = int(math.ceil(c_pixels ** 0.5))
+    print("Key: " + str(key) + "\n")
 
-img_data = cyphertext + b'\0' * (W*H*3 - len(cyphertext))
+    return Fernet(key)
 
-with Image.frombytes('RGB', (W, H), img_data) as cypherpic:
-    d2 = ImageDraw.Draw(cypherpic)
-    d2.text((28,36), "Encrypted Image", font=ImageFont.truetype(font="Keyboard.ttf", size=40), fill=(255,0,0))
-    c_name = "encrypted_img.jpg"
-    cypherpic.show()
-    cypherpic.save(c_name)
-    print("Encrypted Image:\t./"+c_name+"\n")
+# Create/Empty directories for the (marked) original images, encrypted images, and decrypted images
+# Note that the images have the same original filenames to keep track
+def setup_directories():
+    if os.path.isdir(O_path):
+        try:
+            files = glob.glob(O_path+'/*')
+            for f in files:
+                os.remove(f)
+        except OSError as e:
+            print("Error: %s : %s" % (O_path, e.strerror))
+    else:
+        try:
+            os.mkdir(O_path)
+        except OSError as e:
+            print("Error: %s : %s" % (O_path, e.strerror))
 
-timer2 = time.time()
-cleartext = f.decrypt(cyphertext)
-dec_time = time.time() - timer2
-print("Time to decrypt: "+str(round(dec_time, 4))+" seconds\n")
+    if os.path.isdir(E_path):
+        try:
+            files = glob.glob(E_path+'/*')
+            for f in files:
+                os.remove(f)
+        except OSError as e:
+            print("Error: %s : %s" % (E_path, e.strerror))
+    else:
+        try:
+            os.mkdir(E_path)
+        except OSError as e:
+            print("Error: %s : %s" % (E_path, e.strerror))
 
+    if os.path.isdir(D_path):
+        try:
+            files = glob.glob(D_path+'/*')
+            for f in files:
+                os.remove(f)
+        except OSError as e:
+            print("Error: %s : %s" % (D_path, e.strerror))
+    else:
+        try:
+            os.mkdir(D_path)
+        except OSError as e:
+            print("Error: %s : %s" % (D_path, e.strerror))
 
-if cleartext == msg:
-    print("It Worked!\n")
-    output = Image.fromarray(np.frombuffer(cleartext, dtype=datatype).reshape(shape))
-    o_name = "output_img.jpg"
-    d3 = ImageDraw.Draw(output)
-    d3.text((28,36), "Decrypted Image", font=ImageFont.truetype(font="Keyboard.ttf", size=40), fill=(255,0,0))
-    output.show()
-    output.save(o_name)
-    print("Decrypted Image:\t./"+o_name+"\n")
-else:
-    print("FAIL.\n")
+# Helper function for build_and_save()
+# Write text on the images and save them to their respective directories
+def label_and_save(image, label, filename, save_dir):
+    d = ImageDraw.Draw(image)
+    d.text((28,36), label, font=ImageFont.truetype(font="Keyboard.ttf", size=40), fill=(255,0,0))
+    image.save(save_dir+"/"+filename.replace("./SmallSet_Images/", ''))
 
+# Create the images from the bytearray and save them to their respective directories for logging
+def build_and_save(i_data, b_text, mode):
+    if mode == 0: # encrypted image
+        c_size = len(b_text)
+        c_pixels = int((c_size+2)/3)
+        W = H = int(math.ceil(c_pixels ** 0.5))
 
+        data = b_text + b'\0' * (W*H*3 - len(b_text))
+        cypherpic = Image.frombytes('RGB', (W, H), data)
+        label_and_save(cypherpic, "Encrypted Image", i_data.f_name, E_path)
+    elif mode == 1: #decrypted image
+        output = Image.fromarray(np.frombuffer(b_text, dtype=i_data.datatype).reshape(i_data.shape))
+        label_and_save(output, "Decrypted Image", i_data.f_name, D_path)
+
+# Encrypt plaintext and get execution time
+def encrypt(message, F):
+    timer1 = time.time()
+    c_text = F.encrypt(message)
+    extime = round(time.time() - timer1, 4)
+
+    return c_text, extime
+
+# Decrypt cyphertext and get execution time
+def decrypt(cypher, F):
+    timer2 = time.time()
+    p_text = F.decrypt(cypher)
+    extime = round(time.time() - timer2, 4)
+
+    return p_text, extime
+
+# print out the number of images used, and the average encryption and decryption times with a decimal precision of 4
+def print_results(num_images, e_times, d_times):
+    print("Number of images: "+str(num_images)+"\n")
+    print("Average Encryption Time: "+str(round(np.mean(e_times), 4))+" seconds\n")
+    print("Average Decryption Time: "+str(round(np.mean(d_times), 4))+" seconds\n")
+
+# main driver code
+def main():
+
+    # for debugging use the small dataset
+    images = get_images("./SmallSet_Images/")
+
+    # uncomment the following line to do testing on larger dataset
+    # images = get_images("./Sample_Images/")
+
+    # if directories already exist, empty them, else create them
+    setup_directories()
+
+    # get the key
+    k = get_key()
+
+    # initialize lists to hold execution times of encryption and decryption
+    enc_times = []
+    dec_times = []
+
+    # initialize progress bar
+    widgets = ['Batch Encryption/Decryption: ', progressbar.Bar('█'),' (', progressbar.ETA(), ') ',]
+    bar = progressbar.ProgressBar(28, widgets = widgets).start()
+    t = 0
+
+    # loop through loaded images and run encryption and decryption
+    # timing information is gathered in the encrypt() and decrypt() functions
+    for i in images:
+
+        t += 1
+
+        # mark and save the input image to the respective directory
+        label_and_save(i.image, "Orignial Image", i.f_name, O_path)
+
+        # initialize message variable for input to encryption function
+        msg = i.b_array
+
+        # get the cyphertext and the execution time from the encryption function
+        cyphertext, encryption_time = encrypt(msg, k)
+        # append the execution time to the respective list
+        enc_times.append(encryption_time)
+        # create an image from the cyphertext and save it to its respective directory
+        build_and_save(i, cyphertext, 0)
+
+        # get the cleartext (decrypted bytearray/text) and the execution time from the decryption function
+        cleartext, decryption_time = decrypt(cyphertext, k)
+        # append the execution time to the respective list
+        dec_times.append(decryption_time)
+        # create an image from the cleartext and save it to its respective directory
+        build_and_save(i, cleartext, 1)
+
+        bar.update(t)
+    print("\n\n")
+
+    # output the results
+    print_results(len(images), enc_times, dec_times)
+
+if __name__ == '__main__':
+    main()
