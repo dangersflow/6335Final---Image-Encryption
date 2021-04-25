@@ -14,6 +14,7 @@ import threading
 import random
 import image_slicer
 from image_slicer import join
+import collections
 
 # Get the number of CPUs
 # in the system using
@@ -27,20 +28,27 @@ enc_times = []
 dec_times = []
 #have thread list
 threads = []
-
+#have tile map (for keeping track of the shape and dimensions before encryption)
+tilesMap = {}
 
 #thread class
 class encryptionThread (threading.Thread):
-   def __init__(self, threadID, chunk, key, tile):
+   def __init__(self, threadID, chunk, key, tile, encryptionMode):
       threading.Thread.__init__(self)
       self.threadID = threadID
       self.chunk = chunk
       self.key = key
       self.tile = tile
+      self.encryptionMode = encryptionMode
    def run(self):
-      print ("Starting encryption on chunk " + str(self.threadID) + "\n")
-      encrypt_chunk(self.chunk, self.key, self.tile)
-      print ("Finished encrypting chunk " + str(self.threadID) + "\n")
+      if self.encryptionMode == 0: 
+        print ("Starting encryption on chunk " + str(self.threadID) + "\n")
+        encrypt_chunk(self.chunk, self.key, self.tile)
+        print ("Finished encrypting chunk " + str(self.threadID) + "\n")
+      else:
+        print ("Starting decryption on chunk " + str(self.threadID) + "\n")
+        decrypt_chunk(self.chunk, self.key, self.tile)
+        print ("Finished decrypting chunk " + str(self.threadID) + "\n")
 
 def create_image(cyphertext, tile, mode):
     if mode == 0:
@@ -51,7 +59,9 @@ def create_image(cyphertext, tile, mode):
         data = cyphertext + b'\0' * (W*H*3 - len(cyphertext))
         cypherpic = Image.frombytes('RGB', (W, H), data)
         tile.image = cypherpic
-
+    else:
+        clearimage = Image.fromarray(np.frombuffer(cyphertext, dtype=tilesMap[tile.number].datatype).reshape(tilesMap[tile.number].shape))
+        tile.image = clearimage
 
 def encrypt_chunk(msg, key, tile):
     # get the cyphertext and the execution time from the encryption function
@@ -67,7 +77,7 @@ def decrypt_chunk(msg, key, tile):
     # append the execution time to the respective list
     dec_times.append(decryption_time)
     #create the image and modify the tile
-    #Image.fromarray(np.frombuffer(b_text, dtype=i_data.datatype).reshape(i_data.shape))
+    create_image(cleartext, tile, 1)
 
 #global path definitions
 O_path = os.path.join("./", "Original_Images")
@@ -82,6 +92,15 @@ class Image_Data:
         self.b_array = np.array(image).tobytes()
         self.shape = np.array(image).shape
         self.datatype = np.array(image).dtype.name
+
+# Wrapper for PIL images 
+class Tile_Data:
+    def __init__(self, image, num):
+        self.image = image
+        self.b_array = np.array(image).tobytes()
+        self.shape = np.array(image).shape
+        self.datatype = np.array(image).dtype.name
+        self.tileNumber = num
 
 # Generate Image_Data list
 def get_images(path):
@@ -192,8 +211,8 @@ def decrypt(cypher, F):
 # print out the number of images used, and the average encryption and decryption times with a decimal precision of 4
 def print_results(num_images, e_times, d_times):
     print("Number of images: "+str(num_images)+"\n")
-    print("Average Encryption Time: "+str(round(np.mean(e_times), 4))+" seconds\n")
-    print("Average Decryption Time: "+str(round(np.mean(d_times), 4))+" seconds\n")
+    print("Average Encryption Time: "+str(round(np.mean(e_times), 4) * cpuCount)+" seconds\n")
+    print("Average Decryption Time: "+str(round(np.mean(d_times), 4) * cpuCount)+" seconds\n")
 
 # main driver code
 def main():
@@ -223,7 +242,7 @@ def main():
     for i in images:
 
         #slice up the image according to the number of cpu threads you have
-        tiles = image_slicer.slice(i.f_name, cpuCount)
+        tiles = image_slicer.slice(i.f_name, cpuCount, save=False)
 
         t += 1
 
@@ -231,10 +250,12 @@ def main():
         label_and_save(i.image, "Original Image", i.f_name, O_path)
 
         for tile in tiles:
+            #save tile data
+            tilesMap[tile.number] = Tile_Data(tile.image, tile.number)
             # initialize message variable for input to encryption function (turn each tile into a byte array)
             msg = np.array(tile.image).tobytes()
             #create new thread & pass along the chunk with the key
-            newThread = encryptionThread(tile.number, msg, k, tile)
+            newThread = encryptionThread(tile.number, msg, k, tile, 0)
             newThread.start()
             threads.append(newThread)
         
@@ -248,6 +269,23 @@ def main():
         image.save(".\\Encrypted_Images\\" + str(random.randint(1, 1000000)) + ".png")
         #build_and_save(i, image, 0)
 
+        #start decryption process
+        for tile in tiles:
+            msg = np.array(tile.image).tobytes()
+
+            
+            threads[tile.number - 1] = encryptionThread(tile.number, msg, k, tile, 1)
+            threads[tile.number - 1].start()
+
+        print("Number of threads active: " + str(threading.active_count()))
+        
+        #wait for all of the threads to finish their work
+        print("Waiting for all the threads to finish...")
+        for thread in threads:
+            thread.join()
+        
+        image = join(tiles)
+        image.save(".\\Decrypted_Images\\" + str(random.randint(1, 1000000)) + ".png")
         
         # create an image from the cleartext and save it to its respective directory
         ##build_and_save(i, cleartext, 1)
