@@ -18,6 +18,8 @@ O_path = Path("Original_Images")
 E_path = Path("Encrypted_Images")
 D_path = Path("Decrypted_Images")
 img_dir = Path("Test")
+# img_dir = Path("SmallSet_Images")
+# img_dir = Path("Sample_Images")
 
 # Font for ImageDraw
 myFont = Path("Fonts") / "Teletactile.ttf"
@@ -37,7 +39,7 @@ def get_images(path):
     img_arr = []
 
     # initialize a progress bar for loading images
-    widgets = ['Loading Images...', progressbar.AnimatedMarker()]
+    widgets = ['Loading Images... ', progressbar.AnimatedMarker()]
     bar = progressbar.ProgressBar(widgets = widgets).start()
     i = 0
 
@@ -146,7 +148,7 @@ def print_results(num_images, e_times, d_times):
 # main driver code
 def main():
 
-    # for debugging use the small dataset
+    # create images list
     images = get_images(img_dir)
 
     # if directories already exist, empty them, else create them
@@ -160,7 +162,7 @@ def main():
     dec_times = []
 
     # initialize a progress bar for loading images
-    widgets = ['Batch Encryption/Decryption...', progressbar.AnimatedMarker()]
+    widgets = ['Batch Encryption/Decryption... ', progressbar.AnimatedMarker()]
     bar = progressbar.ProgressBar(widgets = widgets).start()
     t = 0
 
