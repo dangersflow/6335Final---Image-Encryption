@@ -180,7 +180,7 @@ def setup_directories():
 # Write text on the images and save them to their respective directories
 def label_and_save(image, label, filename, save_dir):
     d = ImageDraw.Draw(image)
-    d.text((28,36), label, font=ImageFont.truetype(font="arial.ttf", size=40), fill=(255,0,0))
+    d.text((28,36), label, font=ImageFont.load_default(), fill=(255,0,0))
     #image.save(save_dir + "/" + filename.replace("./SmallSet_Images/", ''))
     image.save(save_dir + "/" + str(random.randint(1, 1000000)) + ".jpg")
 

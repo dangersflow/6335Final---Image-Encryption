@@ -10,38 +10,42 @@ import glob
 import math
 import time
 import progressbar
+from pathlib import Path
+import shutil
 
 #global path definitions
-O_path = os.path.join("./", "Original_Images")
-E_path = os.path.join("./", "Encrypted_Images")
-D_path = os.path.join("./", "Decrypted_Images")
+O_path = Path("Original_Images")
+E_path = Path("Encrypted_Images")
+D_path = Path("Decrypted_Images")
+img_dir = Path("Test")
+
+# Font for ImageDraw
+myFont = Path("Fonts") / "Teletactile.ttf"
 
 # Wrapper for PIL images 
 class Image_Data:
-    def __init__(self, image):
+    def __init__(self, image, filename):
         self.image = image
-        self.f_name = image.filename
+        self.f_name = filename
         self.b_array = np.array(image).tobytes()
         self.shape = np.array(image).shape
         self.datatype = np.array(image).dtype.name
 
 # Generate Image_Data list
 def get_images(path):
-    img_dir = path
-    data_path = os.path.join(img_dir,'*g') 
-    files = glob.glob(data_path) 
+    files = path.glob('*g')
     img_arr = []
 
     # initialize a progress bar for loading images
-    widgets = ['Loading Images: ', progressbar.Bar('█'),' (', progressbar.ETA(), ') ',]
-    bar = progressbar.ProgressBar(28, widgets = widgets).start()
+    widgets = ['Loading Images...', progressbar.AnimatedMarker()]
+    bar = progressbar.ProgressBar(widgets = widgets).start()
     i = 0
 
     # loop through the images and append the newly created PIL image to the Image_Data list
     for f in files:
         i += 1 
         img = Image.open(f)
-        img_arr.append(Image_Data(img))
+        img_arr.append(Image_Data(img, f.name))
         bar.update(i)
     print("\n\n")
 
@@ -60,51 +64,48 @@ def get_key():
 # Create/Empty directories for the (marked) original images, encrypted images, and decrypted images
 # Note that the images have the same original filenames to keep track
 def setup_directories():
-    if os.path.isdir(O_path):
+    if O_path.is_dir():
         try:
-            files = glob.glob(O_path+'/*')
-            for f in files:
-                os.remove(f)
+            shutil.rmtree(O_path)
+            os.mkdir(O_path)
         except OSError as e:
-            print("Error: %s : %s" % (O_path, e.strerror))
+            print("Error: %s : %s" % (O_path.name, e.strerror))
     else:
         try:
             os.mkdir(O_path)
         except OSError as e:
-            print("Error: %s : %s" % (O_path, e.strerror))
+            print("Error: %s : %s" % (O_path.name, e.strerror))
 
-    if os.path.isdir(E_path):
+    if E_path.is_dir():
         try:
-            files = glob.glob(E_path+'/*')
-            for f in files:
-                os.remove(f)
+            shutil.rmtree(E_path)
+            os.mkdir(E_path)
         except OSError as e:
-            print("Error: %s : %s" % (E_path, e.strerror))
+            print("Error: %s : %s" % (E_path.name, e.strerror))
     else:
         try:
             os.mkdir(E_path)
         except OSError as e:
-            print("Error: %s : %s" % (E_path, e.strerror))
+            print("Error: %s : %s" % (E_path.name, e.strerror))
 
-    if os.path.isdir(D_path):
+    if D_path.is_dir():
         try:
-            files = glob.glob(D_path+'/*')
-            for f in files:
-                os.remove(f)
+            shutil.rmtree(D_path)
+            os.mkdir(D_path)
         except OSError as e:
-            print("Error: %s : %s" % (D_path, e.strerror))
+            print("Error: %s : %s" % (D_path.name, e.strerror))
     else:
         try:
             os.mkdir(D_path)
         except OSError as e:
-            print("Error: %s : %s" % (D_path, e.strerror))
+            print("Error: %s : %s" % (D_path.name, e.strerror))
 
 # Helper function for build_and_save()
 # Write text on the images and save them to their respective directories
 def label_and_save(image, label, filename, save_dir):
     d = ImageDraw.Draw(image)
-    d.text((28,36), label, font=ImageFont.truetype(font="arial.ttf", size=40), fill=(255,0,0))
-    image.save(save_dir+"/"+filename.replace("./SmallSet_Images/", ''))
+    d.text((28,36), label, font=ImageFont.truetype(font=str(myFont), size = 80), fill=(255,0,0))
+    image.save(str(save_dir / filename))
 
 # Create the images from the bytearray and save them to their respective directories for logging
 def build_and_save(i_data, b_text, mode):
@@ -146,10 +147,7 @@ def print_results(num_images, e_times, d_times):
 def main():
 
     # for debugging use the small dataset
-    images = get_images("./SmallSet_Images/")
-
-    # uncomment the following line to do testing on larger dataset
-    # images = get_images("./Sample_Images/")
+    images = get_images(img_dir)
 
     # if directories already exist, empty them, else create them
     setup_directories()
@@ -161,9 +159,9 @@ def main():
     enc_times = []
     dec_times = []
 
-    # initialize progress bar
-    widgets = ['Batch Encryption/Decryption: ', progressbar.Bar('█'),' (', progressbar.ETA(), ') ',]
-    bar = progressbar.ProgressBar(28, widgets = widgets).start()
+    # initialize a progress bar for loading images
+    widgets = ['Batch Encryption/Decryption...', progressbar.AnimatedMarker()]
+    bar = progressbar.ProgressBar(widgets = widgets).start()
     t = 0
 
     # loop through loaded images and run encryption and decryption
